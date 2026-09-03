@@ -1,46 +1,43 @@
 # Open PDF to DOCX
 
-A self-hosted PDF to Word (DOCX) converter focused on producing editable documents while preserving the original page geometry as closely as practical.
+A self-hosted PDF to Word (DOCX) converter focused on preserving the original PDF page appearance while also providing a separate editable reconstruction mode.
 
-## Version 1.0.0
+## Version 1.1.0
 
-This release is the first complete conversion engine rather than the earlier proof-of-concept.
+### Conversion modes
+
+- **High fidelity (recommended):** renders each PDF page at high resolution and places it at the exact source page size in DOCX. This is the best choice for CVs, forms, brochures, certificates, multi-column layouts, logos and PDFs with heavily positioned elements.
+- **Editable:** extracts words, fonts, images and basic geometry and rebuilds the content as normal editable Word paragraphs. This is useful when text editing is more important than pixel-level layout.
+
+The high-fidelity mode deliberately does **not** use `pdf2docx`. It uses PyMuPDF to render the source page, avoiding the paragraph reflow problem where a complex PDF becomes a long, incorrectly positioned Word document.
 
 ### Included
 
 - No `pdf2docx` dependency.
-- Real PDF word extraction instead of treating whole text spans as words.
-- Font family, size, bold, italic and text color preservation where available.
-- Paragraph/block inference from PDF geometry.
-- Basic two-column reading-order detection.
-- Page dimensions and margins derived from the source PDF.
-- Embedded PDF images copied into the DOCX with their source dimensions.
+- PyMuPDF-based PDF parsing and rendering.
+- High-fidelity page reproduction with configurable DPI (`FIDELITY_DPI`, default 180, allowed range 120–300).
+- Editable text reconstruction mode.
+- Font family, size, bold, italic and text color preservation where available in editable mode.
+- Basic paragraph/block inference and two-column reading-order detection in editable mode.
+- Source PDF page dimensions preserved.
+- Embedded PDF images copied in editable mode.
 - Chinese/CJK font metadata written into DOCX runs when the source font is available.
-- Browser drag-and-drop upload UI.
+- Browser drag-and-drop upload UI with conversion-mode selection.
 - 100 MB default upload limit, configurable with `MAX_UPLOAD_MB`.
-- Automatic temporary-file cleanup after a successful download.
+- Automatic temporary-file cleanup after successful download.
 - Docker deployment.
 
-### Best results
+## Why high fidelity is the default
 
-The engine is optimized for text-based PDFs such as articles, reports, resumes, manuals and business documents. PDFs that are scans, heavily composed of positioned text boxes, contain complex vector tables, or depend on unusual proprietary fonts may still require OCR or specialized layout handling.
+PDF is a fixed-position document format. Word is a reflowable document format. A PDF can place every word, image and line at an arbitrary coordinate, while a normal Word paragraph is expected to flow around other content. Trying to force a complex PDF into ordinary paragraphs often produces exactly the kind of result where headings, contact fields and columns drift vertically or horizontally.
 
-## Architecture
+High-fidelity mode solves that specific problem by treating each source PDF page as the visual canvas it actually is. The resulting DOCX preserves the original page composition instead of allowing Word to reflow it.
 
-```text
-PDF
-  -> word/font/image extraction
-  -> geometry-based layout analysis
-  -> editable document reconstruction
-  -> OOXML DOCX builder
-  -> .docx
-```
-
-The extraction and reconstruction layers are deliberately separated so future releases can add OCR, table detection, floating text boxes and more advanced reading-order analysis without replacing the web application.
+This is the most reliable mode when the requirement is **“make the Word file look as close to the PDF as possible.”**
 
 ## Run locally with Docker Desktop (recommended on Windows)
 
-Make sure Docker Desktop is running, then open PowerShell or Command Prompt in the project directory and run:
+Make sure Docker Desktop is running, then open PowerShell or Command Prompt in the project directory:
 
 ```bash
 docker compose up --build
@@ -50,7 +47,7 @@ Then open:
 
 `http://localhost:8000`
 
-Upload a PDF in the browser and download the generated DOCX. The default upload limit is 100 MB.
+Choose **High fidelity** for the closest visual match, or **Editable** when you need reconstructed text and images.
 
 To stop the service:
 
@@ -91,7 +88,25 @@ Open `http://127.0.0.1:8000`.
 
 `GET /api/health` returns the service version.
 
-`POST /api/convert` accepts a PDF as multipart field `file` and returns a DOCX file.
+`POST /api/convert` accepts a PDF as multipart field `file` and an optional multipart field `mode`:
+
+- `fidelity` (default)
+- `editable`
+
+Example:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/convert \
+  -F "file=@sample.pdf" \
+  -F "mode=fidelity" \
+  -o sample.docx
+```
+
+## Limitations
+
+High-fidelity mode is visual-first: the PDF page is represented by a high-resolution image inside the DOCX, so it is not equivalent to converting every PDF glyph into independently editable Word text. Editable mode provides actual Word text, but complex positioned layouts can still differ from the source because of the fundamental PDF-to-Word layout-model mismatch.
+
+Scanned PDFs without a text layer still need OCR for a fully editable reconstruction. Complex vector drawings, unusual fonts, interactive PDF features and advanced forms may also require specialized handling.
 
 ## Dependency licensing
 
