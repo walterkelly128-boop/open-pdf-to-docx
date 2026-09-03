@@ -13,21 +13,11 @@ from .layout import LayoutBlock, LayoutLine, build_layout
 from .pdf_parser import PdfImage, PdfPage, PdfWord, iter_pages
 
 _FONT_MAP = {
-    "ArialMT": "Arial",
-    "Arial-BoldMT": "Arial",
-    "TimesNewRomanPSMT": "Times New Roman",
-    "TimesNewRomanPS-BoldMT": "Times New Roman",
-    "Helvetica": "Arial",
-    "Helvetica-Bold": "Arial",
-    "Helvetica-Oblique": "Arial",
-    "Courier": "Courier New",
-    "Calibri": "Calibri",
-    "SimSun": "SimSun",
-    "宋体": "SimSun",
-    "Microsoft YaHei": "Microsoft YaHei",
-    "微软雅黑": "Microsoft YaHei",
+    "ArialMT": "Arial", "Arial-BoldMT": "Arial", "TimesNewRomanPSMT": "Times New Roman",
+    "TimesNewRomanPS-BoldMT": "Times New Roman", "Helvetica": "Arial", "Helvetica-Bold": "Arial",
+    "Helvetica-Oblique": "Arial", "Courier": "Courier New", "Calibri": "Calibri",
+    "SimSun": "SimSun", "宋体": "SimSun", "Microsoft YaHei": "Microsoft YaHei", "微软雅黑": "Microsoft YaHei",
 }
-
 W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 V_NS = "urn:schemas-microsoft-com:vml"
 O_NS = "urn:schemas-microsoft-com:office:office"
@@ -62,20 +52,7 @@ def _set_run_font(run, word: PdfWord) -> None:
         rfonts.set(qn(f"w:{attr}"), name)
 
 
-def _set_paragraph_exact_line_height(paragraph, height_pt: float) -> None:
-    spacing = paragraph.paragraph_format
-    spacing.space_before = Pt(0)
-    spacing.space_after = Pt(0)
-    ppr = paragraph._p.get_or_add_pPr()
-    el = ppr.find(qn("w:spacing"))
-    if el is None:
-        el = OxmlElement("w:spacing")
-        ppr.append(el)
-    el.set(qn("w:line"), str(max(1, round(height_pt * 20))))
-    el.set(qn("w:lineRule"), "exact")
-
-
-def _add_text_box(doc: Document, block: LayoutBlock, page: PdfPage, shape_id: int) -> None:
+def _add_text_box(doc: Document, block: LayoutBlock, shape_id: int) -> None:
     width = max(4.0, block.x1 - block.x0 + 2.0)
     height = max(4.0, block.y1 - block.y0 + 3.0)
     style = (
@@ -87,20 +64,17 @@ def _add_text_box(doc: Document, block: LayoutBlock, page: PdfPage, shape_id: in
     )
     xml = (
         f'<w:pict xmlns:w="{W_NS}" xmlns:v="{V_NS}" xmlns:o="{O_NS}" xmlns:r="{R_NS}">'
-        f'<v:shape id="TextBox{shape_id}" type="#_x0000_t202" '
-        f'style="{escape(style)}" stroked="f" filled="f">'
-        '<v:textbox inset="0,0,0,0"><w:txbxContent>'
-        '</w:txbxContent></v:textbox></v:shape></w:pict>'
+        f'<v:shape id="TextBox{shape_id}" type="#_x0000_t202" style="{escape(style)}" stroked="f" filled="f">'
+        '<v:textbox inset="0,0,0,0"><w:txbxContent/></v:textbox></v:shape></w:pict>'
     )
     pict = parse_xml(xml)
-    txbx = pict.xpath('.//w:txbxContent', namespaces={"w": W_NS})[0]
-
+    txbx = pict.xpath(".//w:txbxContent")[0]
     for line in block.lines:
         p = OxmlElement("w:p")
         ppr = OxmlElement("w:pPr")
         p.append(ppr)
         spacing = OxmlElement("w:spacing")
-        line_height = max(line.height, max((w.size for w in line.words), default=8) * 1.05)
+        line_height = max(line.y1 - line.y0, max((w.size for w in line.words), default=8) * 1.05)
         spacing.set(qn("w:line"), str(max(1, round(line_height * 20))))
         spacing.set(qn("w:lineRule"), "exact")
         ppr.append(spacing)
@@ -139,11 +113,10 @@ def _add_text_box(doc: Document, block: LayoutBlock, page: PdfPage, shape_id: in
             p.append(r)
             previous = word
         txbx.append(p)
-
     doc.paragraphs[-1]._p.append(pict)
 
 
-def _add_positioned_image(doc: Document, image: PdfImage, page: PdfPage, shape_id: int) -> None:
+def _add_positioned_image(doc: Document, image: PdfImage, shape_id: int) -> None:
     try:
         r_id, _ = doc.part.get_or_add_image(BytesIO(image.data))
     except Exception:
@@ -153,15 +126,13 @@ def _add_positioned_image(doc: Document, image: PdfImage, page: PdfPage, shape_i
     style = (
         f"position:absolute;margin-left:{image.x0:.2f}pt;margin-top:{image.y0:.2f}pt;"
         f"width:{width:.2f}pt;height:{height:.2f}pt;"
-        "mso-position-horizontal-relative:page;"
-        "mso-position-vertical-relative:page;"
+        "mso-position-horizontal-relative:page;mso-position-vertical-relative:page;"
         f"z-index:{shape_id};mso-wrap-style:none;"
     )
     xml = (
         f'<w:pict xmlns:w="{W_NS}" xmlns:v="{V_NS}" xmlns:o="{O_NS}" xmlns:r="{R_NS}">'
-        f'<v:shape id="Image{shape_id}" type="#_x0000_t75" style="{escape(style)}" '
-        'stroked="f" filled="f"><v:imagedata r:id="' + r_id + '" o:title="PDF image" />'
-        '</v:shape></w:pict>'
+        f'<v:shape id="Image{shape_id}" type="#_x0000_t75" style="{escape(style)}" stroked="f" filled="f">'
+        f'<v:imagedata r:id="{r_id}" o:title="PDF image" /></v:shape></w:pict>'
     )
     doc.paragraphs[-1]._p.append(parse_xml(xml))
 
@@ -171,8 +142,7 @@ def _configure_section(section, page: PdfPage) -> None:
     section.page_height = Inches(page.height / 72)
     section.top_margin = section.bottom_margin = Inches(0)
     section.left_margin = section.right_margin = Inches(0)
-    section.header_distance = Inches(0)
-    section.footer_distance = Inches(0)
+    section.header_distance = section.footer_distance = Inches(0)
 
 
 def _content_items(page: PdfPage) -> Iterable[tuple[float, int, object]]:
@@ -182,20 +152,12 @@ def _content_items(page: PdfPage) -> Iterable[tuple[float, int, object]]:
     return sorted(items, key=lambda item: (item[0], item[1]))
 
 
-def _add_page_anchor_paragraph(doc: Document):
-    p = doc.add_paragraph()
-    p.paragraph_format.space_before = Pt(0)
-    p.paragraph_format.space_after = Pt(0)
-    p.paragraph_format.line_spacing = 1.0
-    return p
-
-
 def _convert_positioned_editable(pdf_path: str | Path, output_path: str | Path) -> None:
-    """Rebuild each PDF page as independently editable, absolutely positioned Word objects.
+    """Convert PDF pages to editable, coordinate-preserving DOCX objects.
 
-    Text remains real DOCX text inside editable Word text boxes. Images are real
-    embedded Word images. Coordinates are preserved relative to the PDF page,
-    avoiding the large drift caused by ordinary flowing paragraphs.
+    Every detected text block becomes a real Word text box, so its characters can
+    be selected, replaced, formatted and moved in Microsoft Word. Images remain
+    embedded Word images. No PDF page is rasterized into a single picture.
     """
     doc = Document()
     first = True
@@ -204,37 +166,25 @@ def _convert_positioned_editable(pdf_path: str | Path, output_path: str | Path) 
         section = doc.sections[0] if first else doc.add_section(WD_SECTION.NEW_PAGE)
         first = False
         _configure_section(section, page)
-        anchor = _add_page_anchor_paragraph(doc)
+        doc.add_paragraph().paragraph_format.space_after = Pt(0)
         for _, kind, item in _content_items(page):
             if kind == 0:
-                _add_positioned_image(doc, item, page, shape_id)
+                _add_positioned_image(doc, item, shape_id)
             else:
-                _add_text_box(doc, item, page, shape_id)
+                _add_text_box(doc, item, shape_id)
             shape_id += 1
-        # Keep a minimal page anchor so the section has a stable body paragraph.
-        anchor.paragraph_format.space_after = Pt(0)
-
-    if len(doc.paragraphs) > 1 and not doc.paragraphs[-1].text and len(doc.paragraphs[-1]._p) == 1:
-        element = doc.paragraphs[-1]._element
-        element.getparent().remove(element)
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     doc.save(output_path)
 
 
 def _convert_editable(pdf_path: str | Path, output_path: str | Path) -> None:
-    """Compatibility editable mode; uses the same positioned text reconstruction."""
     _convert_positioned_editable(pdf_path, output_path)
 
 
-def convert_pdf_to_docx(
-    pdf_path: str | Path,
-    output_path: str | Path,
-    mode: str = "fidelity",
-    fidelity_dpi: int = 180,
-) -> None:
+def convert_pdf_to_docx(pdf_path: str | Path, output_path: str | Path, mode: str = "fidelity", fidelity_dpi: int = 180) -> None:
     mode = (mode or "fidelity").lower().strip()
     if mode not in {"fidelity", "editable"}:
         raise ValueError("mode must be 'fidelity' or 'editable'")
-    # Both modes now preserve real editable text. fidelity means coordinate-first
-    # reconstruction rather than rasterization; the DPI argument is retained for API compatibility.
+    # fidelity_dpi is retained for API compatibility. The new fidelity mode is
+    # vector/text based and therefore does not rasterize the PDF.
     _convert_positioned_editable(pdf_path, output_path)
