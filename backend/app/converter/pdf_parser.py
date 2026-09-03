@@ -85,24 +85,44 @@ def iter_pages(pdf_path: str | Path) -> Iterator[PdfPage]:
                         if int(item[5]) == block_no and int(item[6]) == line_no
                     ]
                     line_words.sort(key=lambda item: (float(item[0]), float(item[1])))
-                    for word_no, item in enumerate(line_words):
-                        x0, y0, x1, y1, text = item[:5]
-                        if not str(text).strip():
-                            continue
-                        bbox = (float(x0), float(y0), float(x1), float(y1))
-                        span = _span_for_word(spans, bbox)
-                        words.append(PdfWord(
-                            text=str(text), x0=float(x0), y0=float(y0),
-                            x1=float(x1), y1=float(y1),
-                            size=float(span.get("size", max(1.0, y1 - y0))),
-                            font=str(span.get("font", "Arial")),
-                            flags=int(span.get("flags", 0)),
-                            color=int(span.get("color", 0)),
-                            block_no=block_no, line_no=line_no, word_no=word_no,
-                        ))
+
+                    if line_words:
+                        for word_no, item in enumerate(line_words):
+                            x0, y0, x1, y1, text = item[:5]
+                            if not str(text).strip():
+                                continue
+                            bbox = (float(x0), float(y0), float(x1), float(y1))
+                            span = _span_for_word(spans, bbox)
+                            words.append(PdfWord(
+                                text=str(text), x0=float(x0), y0=float(y0),
+                                x1=float(x1), y1=float(y1),
+                                size=float(span.get("size", max(1.0, y1 - y0))),
+                                font=str(span.get("font", "Arial")),
+                                flags=int(span.get("flags", 0)),
+                                color=int(span.get("color", 0)),
+                                block_no=block_no, line_no=line_no, word_no=word_no,
+                            ))
+                    else:
+                        # Some PDFs have valid text spans that are not represented
+                        # consistently by get_text("words"). Keep the span itself
+                        # as an editable Word object instead of silently dropping it.
+                        for word_no, span in enumerate(spans):
+                            text = str(span.get("text", ""))
+                            if not text.strip():
+                                continue
+                            x0, y0, x1, y1 = span.get("bbox", (0, 0, 0, 0))
+                            words.append(PdfWord(
+                                text=text, x0=float(x0), y0=float(y0),
+                                x1=float(x1), y1=float(y1),
+                                size=float(span.get("size", max(1.0, y1 - y0))),
+                                font=str(span.get("font", "Arial")),
+                                flags=int(span.get("flags", 0)),
+                                color=int(span.get("color", 0)),
+                                block_no=block_no, line_no=line_no, word_no=word_no,
+                            ))
 
             images: list[PdfImage] = []
-            seen: set[tuple[int, int, int, int]] = set()
+            seen: set[tuple[int, int, int, int, int]] = set()
             for image in page.get_images(full=True):
                 xref = image[0]
                 try:
@@ -113,7 +133,7 @@ def iter_pages(pdf_path: str | Path) -> Iterator[PdfPage]:
                     if not data:
                         continue
                     for rect in rects:
-                        key = (xref, round(rect.x0), round(rect.y0), round(rect.x1))
+                        key = (xref, round(rect.x0), round(rect.y0), round(rect.x1), round(rect.y1))
                         if key in seen:
                             continue
                         seen.add(key)
