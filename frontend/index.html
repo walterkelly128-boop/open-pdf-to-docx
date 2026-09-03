@@ -11,7 +11,7 @@
     <section class="hero">
       <div class="badge">OPEN SOURCE · SELF HOSTED</div>
       <h1>PDF to Word</h1>
-      <p>Convert PDF files into DOCX while preserving the original page appearance as closely as possible.</p>
+      <p>Convert PDF files into editable DOCX while preserving page geometry, text positions, fonts and images as closely as possible.</p>
     </section>
 
     <section class="card" id="dropzone">
@@ -23,20 +23,20 @@
       <div class="options">
         <label for="mode">Conversion mode</label>
         <select id="mode">
-          <option value="fidelity" selected>High fidelity — preserve the original page layout</option>
+          <option value="fidelity" selected>High fidelity editable — preserve positions and edit text</option>
           <option value="editable">Editable — reconstruct text and images</option>
         </select>
       </div>
 
       <button id="choose">Choose PDF</button>
-      <div class="hint">High fidelity is recommended for CVs, forms, brochures, multi-column documents and complex layouts.</div>
+      <div class="hint">Text remains real editable Word text. Images are embedded Word objects. The layout is rebuilt with positioned objects instead of converting the page to a picture.</div>
     </section>
 
     <section class="status card hidden" id="status">
       <div class="spinner"></div>
       <div>
         <h2 id="statusTitle">Converting…</h2>
-        <p id="statusText">Rendering the PDF and creating the Word document.</p>
+        <p id="statusText">Analyzing PDF coordinates, fonts and page structure.</p>
       </div>
     </section>
   </main>
