@@ -5,7 +5,7 @@ import tempfile
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.background import BackgroundTask
@@ -14,9 +14,10 @@ from .converter.docx_builder import convert_pdf_to_docx
 
 BASE = Path(__file__).resolve().parents[2]
 STATIC = BASE / "frontend"
-VERSION = "1.0.0"
+VERSION = "1.1.0"
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100"))
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+FIDELITY_DPI = int(os.getenv("FIDELITY_DPI", "180"))
 
 app = FastAPI(title="Open PDF to DOCX", version=VERSION)
 
@@ -33,9 +34,16 @@ def _safe_filename(name: str) -> str:
 
 
 @app.post("/api/convert")
-async def convert(file: UploadFile = File(...)):
+async def convert(
+    file: UploadFile = File(...),
+    mode: str = Form("fidelity"),
+):
     if not file.filename or not file.filename.lower().endswith(".pdf"):
         raise HTTPException(400, "Please upload a PDF file.")
+
+    mode = mode.lower().strip()
+    if mode not in {"fidelity", "editable"}:
+        raise HTTPException(400, "mode must be 'fidelity' or 'editable'.")
 
     job = uuid.uuid4().hex
     work = Path(tempfile.mkdtemp(prefix=f"open-pdf-to-docx-{job}-"))
@@ -59,7 +67,12 @@ async def convert(file: UploadFile = File(...)):
             if check.read(5) != b"%PDF-":
                 raise HTTPException(400, "The uploaded file is not a valid PDF.")
 
-        convert_pdf_to_docx(source, target)
+        convert_pdf_to_docx(
+            source,
+            target,
+            mode=mode,
+            fidelity_dpi=FIDELITY_DPI,
+        )
         cleanup = BackgroundTask(shutil.rmtree, work, ignore_errors=True)
         return FileResponse(
             target,
