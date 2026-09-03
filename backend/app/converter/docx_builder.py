@@ -9,7 +9,7 @@ from docx.oxml import OxmlElement, parse_xml
 from docx.oxml.ns import qn
 from docx.shared import Inches, Pt, RGBColor
 
-from .layout import LayoutBlock, LayoutLine, build_layout
+from .layout import LayoutBlock, build_layout
 from .pdf_parser import PdfImage, PdfPage, PdfWord, iter_pages
 
 _FONT_MAP = {
@@ -35,23 +35,6 @@ def safe_font(name: str) -> str:
     return _FONT_MAP.get(base, base or "Arial")
 
 
-def _set_run_font(run, word: PdfWord) -> None:
-    name = safe_font(word.font)
-    run.font.name = name
-    run.font.size = Pt(max(1.0, word.size))
-    run.bold = word.bold
-    run.italic = word.italic
-    value = max(0, min(0xFFFFFF, int(word.color)))
-    run.font.color.rgb = RGBColor((value >> 16) & 255, (value >> 8) & 255, value & 255)
-    rpr = run._element.get_or_add_rPr()
-    rfonts = rpr.rFonts
-    if rfonts is None:
-        rfonts = OxmlElement("w:rFonts")
-        rpr.insert(0, rfonts)
-    for attr in ("ascii", "hAnsi", "eastAsia", "cs"):
-        rfonts.set(qn(f"w:{attr}"), name)
-
-
 def _add_text_box(doc: Document, block: LayoutBlock, shape_id: int) -> None:
     width = max(4.0, block.x1 - block.x0 + 2.0)
     height = max(4.0, block.y1 - block.y0 + 3.0)
@@ -68,21 +51,25 @@ def _add_text_box(doc: Document, block: LayoutBlock, shape_id: int) -> None:
         '<v:textbox inset="0,0,0,0"><w:txbxContent/></v:textbox></v:shape></w:pict>'
     )
     pict = parse_xml(xml)
-    txbx = pict.xpath(".//w:txbxContent")[0]
+    # Do not use pict.xpath('.//w:...'): namespace declarations on the parsed
+    # fragment are not reliably registered with lxml's XPath evaluator.
+    txbx = next(pict.iter(f"{{{W_NS}}}txbxContent"), None)
+    if txbx is None:
+        raise RuntimeError("Unable to create Word text box content node")
+
     for line in block.lines:
         p = OxmlElement("w:p")
         ppr = OxmlElement("w:pPr")
-        p.append(ppr)
         spacing = OxmlElement("w:spacing")
         line_height = max(line.y1 - line.y0, max((w.size for w in line.words), default=8) * 1.05)
         spacing.set(qn("w:line"), str(max(1, round(line_height * 20))))
         spacing.set(qn("w:lineRule"), "exact")
         ppr.append(spacing)
+        p.append(ppr)
         previous = None
         for word in line.words:
             r = OxmlElement("w:r")
             rpr = OxmlElement("w:rPr")
-            r.append(rpr)
             rfonts = OxmlElement("w:rFonts")
             name = safe_font(word.font)
             for attr in ("ascii", "hAnsi", "eastAsia", "cs"):
@@ -95,10 +82,11 @@ def _add_text_box(doc: Document, block: LayoutBlock, shape_id: int) -> None:
                 rpr.append(OxmlElement("w:b"))
             if word.italic:
                 rpr.append(OxmlElement("w:i"))
-            color = OxmlElement("w:color")
             value = max(0, min(0xFFFFFF, int(word.color)))
+            color = OxmlElement("w:color")
             color.set(qn("w:val"), f"{value:06X}")
             rpr.append(color)
+            r.append(rpr)
             text = word.text
             if previous is not None:
                 gap = word.x0 - previous.x1
@@ -153,12 +141,7 @@ def _content_items(page: PdfPage) -> Iterable[tuple[float, int, object]]:
 
 
 def _convert_positioned_editable(pdf_path: str | Path, output_path: str | Path) -> None:
-    """Convert PDF pages to editable, coordinate-preserving DOCX objects.
-
-    Every detected text block becomes a real Word text box, so its characters can
-    be selected, replaced, formatted and moved in Microsoft Word. Images remain
-    embedded Word images. No PDF page is rasterized into a single picture.
-    """
+    """Convert PDF pages to editable, coordinate-preserving DOCX objects."""
     doc = Document()
     first = True
     shape_id = 1
@@ -185,6 +168,6 @@ def convert_pdf_to_docx(pdf_path: str | Path, output_path: str | Path, mode: str
     mode = (mode or "fidelity").lower().strip()
     if mode not in {"fidelity", "editable"}:
         raise ValueError("mode must be 'fidelity' or 'editable'")
-    # fidelity_dpi is retained for API compatibility. The new fidelity mode is
-    # vector/text based and therefore does not rasterize the PDF.
+    # fidelity_dpi is retained for API compatibility. Fidelity mode is text/vector
+    # based and intentionally does not rasterize the PDF.
     _convert_positioned_editable(pdf_path, output_path)
