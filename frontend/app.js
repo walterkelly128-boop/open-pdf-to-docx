@@ -4,6 +4,7 @@ const dropzone = document.getElementById('dropzone');
 const status = document.getElementById('status');
 const statusTitle = document.getElementById('statusTitle');
 const statusText = document.getElementById('statusText');
+const modeInput = document.getElementById('mode');
 
 choose.addEventListener('click', () => fileInput.click());
 fileInput.addEventListener('change', () => fileInput.files[0] && upload(fileInput.files[0]));
@@ -24,12 +25,18 @@ async function upload(file) {
     alert('Please choose a PDF file.');
     return;
   }
+
+  const mode = modeInput.value;
   const data = new FormData();
   data.append('file', file);
+  data.append('mode', mode);
+
   dropzone.classList.add('hidden');
   status.classList.remove('hidden');
   statusTitle.textContent = 'Converting…';
-  statusText.textContent = 'Extracting text, analyzing layout and creating the Word document.';
+  statusText.textContent = mode === 'fidelity'
+    ? 'Rendering each PDF page at high resolution and building the DOCX.'
+    : 'Extracting text, analyzing layout and creating the editable DOCX.';
 
   try {
     const response = await fetch('/api/convert', { method: 'POST', body: data });
@@ -41,9 +48,11 @@ async function upload(file) {
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url; a.download = filename; a.click();
-    URL.revokeObjectURL(url);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
     statusTitle.textContent = 'Conversion complete';
-    statusText.textContent = 'The DOCX download has started.';
+    statusText.textContent = mode === 'fidelity'
+      ? 'High-fidelity DOCX generated. The download has started.'
+      : 'Editable DOCX generated. The download has started.';
   } catch (error) {
     statusTitle.textContent = 'Conversion failed';
     statusText.textContent = error.message || 'Unknown error';
