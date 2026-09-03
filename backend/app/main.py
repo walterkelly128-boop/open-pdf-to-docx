@@ -14,7 +14,7 @@ from .converter.docx_builder import convert_pdf_to_docx
 
 BASE = Path(__file__).resolve().parents[2]
 STATIC = BASE / "frontend"
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100"))
 MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
 FIDELITY_DPI = int(os.getenv("FIDELITY_DPI", "180"))
