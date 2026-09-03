@@ -1,9 +1,12 @@
+import os
+import re
 import shutil
 import tempfile
 import uuid
 from pathlib import Path
 
 from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.background import BackgroundTask
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -11,12 +14,22 @@ from .converter.docx_builder import convert_pdf_to_docx
 
 BASE = Path(__file__).resolve().parents[2]
 STATIC = BASE / "frontend"
-app = FastAPI(title="Open PDF to DOCX", version="0.1.0")
+VERSION = "1.0.0"
+MAX_UPLOAD_MB = int(os.getenv("MAX_UPLOAD_MB", "100"))
+MAX_UPLOAD_BYTES = MAX_UPLOAD_MB * 1024 * 1024
+
+app = FastAPI(title="Open PDF to DOCX", version=VERSION)
 
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok"}
+    return {"status": "ok", "version": VERSION}
+
+
+def _safe_filename(name: str) -> str:
+    stem = Path(name).stem
+    stem = re.sub(r"[^\w\-. ]+", "_", stem, flags=re.UNICODE).strip(" .")
+    return (stem or "converted")[:120]
 
 
 @app.post("/api/convert")
@@ -27,17 +40,36 @@ async def convert(file: UploadFile = File(...)):
     job = uuid.uuid4().hex
     work = Path(tempfile.mkdtemp(prefix=f"open-pdf-to-docx-{job}-"))
     source = work / "input.pdf"
-    target = work / f"{Path(file.filename).stem}.docx"
+    target = work / f"{_safe_filename(file.filename)}.docx"
+
     try:
+        size = 0
         with source.open("wb") as output:
-            shutil.copyfileobj(file.file, output)
+            while True:
+                chunk = await file.read(1024 * 1024)
+                if not chunk:
+                    break
+                size += len(chunk)
+                if size > MAX_UPLOAD_BYTES:
+                    raise HTTPException(413, f"PDF exceeds the {MAX_UPLOAD_MB} MB upload limit.")
+                output.write(chunk)
+
+        await file.close()
+        with source.open("rb") as check:
+            if check.read(5) != b"%PDF-":
+                raise HTTPException(400, "The uploaded file is not a valid PDF.")
+
         convert_pdf_to_docx(source, target)
-        response = FileResponse(
+        cleanup = BackgroundTask(shutil.rmtree, work, ignore_errors=True)
+        return FileResponse(
             target,
             media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
             filename=target.name,
+            background=cleanup,
         )
-        return response
+    except HTTPException:
+        shutil.rmtree(work, ignore_errors=True)
+        raise
     except Exception as exc:
         shutil.rmtree(work, ignore_errors=True)
         raise HTTPException(500, f"Conversion failed: {exc}") from exc
