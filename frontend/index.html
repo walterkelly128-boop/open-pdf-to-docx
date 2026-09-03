@@ -11,7 +11,7 @@
     <section class="hero">
       <div class="badge">OPEN SOURCE · SELF HOSTED</div>
       <h1>PDF to Word</h1>
-      <p>Convert PDF files into editable DOCX documents while keeping the original layout as close as possible.</p>
+      <p>Convert PDF files into DOCX while preserving the original page appearance as closely as possible.</p>
     </section>
 
     <section class="card" id="dropzone">
@@ -19,15 +19,24 @@
       <h2>Drop your PDF here</h2>
       <p>or choose a file from your computer</p>
       <input id="file" type="file" accept="application/pdf,.pdf" hidden>
+
+      <div class="options">
+        <label for="mode">Conversion mode</label>
+        <select id="mode">
+          <option value="fidelity" selected>High fidelity — preserve the original page layout</option>
+          <option value="editable">Editable — reconstruct text and images</option>
+        </select>
+      </div>
+
       <button id="choose">Choose PDF</button>
-      <div class="hint">Your file is processed locally by this server.</div>
+      <div class="hint">High fidelity is recommended for CVs, forms, brochures, multi-column documents and complex layouts.</div>
     </section>
 
     <section class="status card hidden" id="status">
       <div class="spinner"></div>
       <div>
         <h2 id="statusTitle">Converting…</h2>
-        <p id="statusText">Extracting PDF text and rebuilding the document.</p>
+        <p id="statusText">Rendering the PDF and creating the Word document.</p>
       </div>
     </section>
   </main>
