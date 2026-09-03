@@ -131,18 +131,28 @@ def _add_full_page_render(doc: Document, page, dpi: int = 180) -> None:
     )
 
 
+def _remove_initial_empty_paragraph(doc: Document) -> None:
+    if not doc.paragraphs:
+        return
+    paragraph = doc.paragraphs[0]
+    if not paragraph.text and len(paragraph._p) == 1:
+        element = paragraph._element
+        element.getparent().remove(element)
+
+
 def _convert_fidelity(pdf_path: str | Path, output_path: str | Path, dpi: int = 180) -> None:
     """Visual-first conversion for complex PDFs.
 
-    Word's normal paragraph model cannot faithfully reproduce arbitrary PDF
-    coordinates, columns, overlays, logos and form-like layouts. Fidelity mode
-    therefore rasterizes each source page at high resolution and puts that
-    page-sized image into Word. This prevents the cascading reflow visible in
-    conventional paragraph reconstruction while keeping the source page size.
+    Word's paragraph model is reflowable, while PDF content may be positioned
+    at arbitrary coordinates. Fidelity mode therefore rasterizes each source
+    page and places it at the exact source page size, preventing the vertical
+    and horizontal drift that complex CVs and forms can develop after normal
+    paragraph reconstruction.
     """
     pdf = fitz.open(pdf_path)
     try:
         doc = Document()
+        _remove_initial_empty_paragraph(doc)
         for index, page in enumerate(pdf):
             section = doc.sections[0] if index == 0 else doc.add_section(WD_SECTION.NEW_PAGE)
             section.page_width = Inches(page.rect.width / 72)
@@ -151,9 +161,6 @@ def _convert_fidelity(pdf_path: str | Path, output_path: str | Path, dpi: int = 
             section.left_margin = section.right_margin = Inches(0)
             section.header_distance = section.footer_distance = Inches(0)
             _add_full_page_render(doc, page, dpi=dpi)
-        if len(doc.paragraphs) == 1 and not doc.paragraphs[0].text:
-            p = doc.paragraphs[0]._element
-            p.getparent().remove(p)
         Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         doc.save(output_path)
     finally:
