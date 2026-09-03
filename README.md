@@ -38,7 +38,37 @@ PDF
 
 The extraction and reconstruction layers are deliberately separated so future releases can add OCR, table detection, floating text boxes and more advanced reading-order analysis without replacing the web application.
 
-## Run locally
+## Run locally with Docker Desktop (recommended on Windows)
+
+Make sure Docker Desktop is running, then open PowerShell or Command Prompt in the project directory and run:
+
+```bash
+docker compose up --build
+```
+
+Then open:
+
+`http://localhost:8000`
+
+Upload a PDF in the browser and download the generated DOCX. The default upload limit is 100 MB.
+
+To stop the service:
+
+```bash
+docker compose down
+```
+
+For Windows, you can also double-click `start-docker.bat` in the project directory.
+
+### Check the container health
+
+```bash
+docker compose ps
+```
+
+The application exposes `GET /api/health` for the container health check.
+
+## Run locally with Python
 
 Python 3.11+ is recommended.
 
@@ -56,18 +86,6 @@ uvicorn backend.app.main:app --reload
 ```
 
 Open `http://127.0.0.1:8000`.
-
-## Docker
-
-```bash
-docker compose up --build
-```
-
-To change the upload limit:
-
-```bash
-MAX_UPLOAD_MB=200 docker compose up --build
-```
 
 ## API
 
