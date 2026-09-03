@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>PDF to Word</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="page">
+    <section class="hero">
+      <div class="badge">OPEN SOURCE · SELF HOSTED</div>
+      <h1>PDF to Word</h1>
+      <p>Convert PDF files into editable DOCX documents while keeping the original layout as close as possible.</p>
+    </section>
+
+    <section class="card" id="dropzone">
+      <div class="icon">↥</div>
+      <h2>Drop your PDF here</h2>
+      <p>or choose a file from your computer</p>
+      <input id="file" type="file" accept="application/pdf,.pdf" hidden>
+      <button id="choose">Choose PDF</button>
+      <div class="hint">Your file is processed locally by this server.</div>
+    </section>
+
+    <section class="status card hidden" id="status">
+      <div class="spinner"></div>
+      <div>
+        <h2 id="statusTitle">Converting…</h2>
+        <p id="statusText">Extracting PDF text and rebuilding the document.</p>
+      </div>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
